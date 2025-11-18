@@ -4,72 +4,57 @@
 <meta charset="UTF-8">
 <title>modcore CRX Viewer</title>
 <style>
-body {
-    font-family: Arial, sans-serif;
-    background-color: #f7f9fc;
-    margin: 0;
-    padding: 0;
-}
-header {
-    background-color: #0d6efd;
-    color: white;
-    padding: 1rem;
-    text-align: center;
-}
-.container {
-    display: flex;
-    flex-direction: column;
-    max-width: 1200px;
-    margin: 2rem auto;
-    padding: 1rem;
-    gap: 1rem;
-}
-input[type="file"] {
-    padding: 0.5rem;
-    font-size: 1rem;
-}
-#fileList {
-    background: #fff;
-    border: 1px solid #ccc;
-    padding: 1rem;
-    max-height: 400px;
-    overflow-y: auto;
-}
-.file-item {
-    cursor: pointer;
-    padding: 0.3rem 0.5rem;
-    border-bottom: 1px solid #eee;
-}
-.file-item:hover {
-    background-color: #f0f0f0;
-}
-#fileContent {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    padding: 1rem;
-    white-space: pre-wrap;
-    overflow-x: auto;
-    max-height: 600px;
-}
-footer {
-    text-align: center;
-    margin: 2rem;
-    color: #666;
-    font-size: 0.9rem;
-}
+  body { margin:0; font-family:Arial,sans-serif; }
+  header { background:#20232a; color:white; padding:12px 20px; font-size:1.5em; display:flex; justify-content:space-between; align-items:center; }
+  header button { background:#61dafb; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; }
+  header button:hover { background:#21a1f1; }
+
+  #main { display:flex; height:calc(100vh - 50px); }
+  #leftPanel { width:320px; background:#fff; border-right:1px solid #ccc; display:flex; flex-direction:column; }
+  #fileControls { padding:10px; border-bottom:1px solid #ccc; }
+  #fileTree { flex:1; overflow:auto; padding:10px; }
+  #fileTree ul { list-style:none; padding-left:15px; }
+  #fileTree li { cursor:pointer; padding:2px 4px; border-radius:3px; }
+  #fileTree li:hover { background:#e0e0e0; }
+  #fileTree li.selected { background:#61dafb; color:#fff; }
+
+  #rightPanel { flex:1; display:flex; flex-direction:column; }
+  #searchContainer { padding:10px; border-bottom:1px solid #ccc; display:flex; gap:5px; align-items:center; }
+  #viewer { flex:1; overflow:auto; padding:10px; font-family:monospace; white-space:pre; background:#1e1e1e; color:#ddd; }
+
+  /* Dark/light themes */
+  body.light #viewer { background:#f5f5f5; color:#111; }
+  body.light #fileTree li.selected { background:#21a1f1; color:#fff; }
+
+  input[type="text"] { flex:1; padding:4px 6px; border-radius:4px; border:1px solid #ccc; }
+  button.small { padding:4px 8px; font-size:0.9em; }
 </style>
+<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.css" rel="stylesheet" />
 </head>
 <body>
 <header>
-    <h1>modcore CRX Viewer</h1>
-    <p>Upload a CRX file and explore its source code</p>
+  modcore CRX Viewer
+  <button id="themeToggle">Toggle Theme</button>
 </header>
-<div class="container">
-    <input type="file" id="crxInput" accept=".crx"/>
-    <div id="fileList"></div>
-    <pre id="fileContent">Select a file to view its content...</pre>
+<div id="main">
+  <div id="leftPanel">
+    <div id="fileControls">
+      <input type="file" id="crxInput" accept=".crx">
+      <button id="processBtn" class="small">Process File</button>
+    </div>
+    <div id="fileTree"><ul id="treeRoot"></ul></div>
+  </div>
+  <div id="rightPanel">
+    <div id="searchContainer">
+      <input type="text" id="searchBox" placeholder="Search files...">
+      <button id="exportBtn" class="small">Export Selected</button>
+    </div>
+    <pre id="viewer" class="language-js">Upload a CRX file and press "Process File" to view source.</pre>
+  </div>
 </div>
-<footer>modcore Extension Manager | GitHub Pages CRX Viewer</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.11.0/dist/jszip.min.js"></script>
 <script src="viewer.js"></script>
 </body>
 </html>
