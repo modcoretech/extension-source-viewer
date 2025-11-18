@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>modcore CRX Viewer</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f7f9fc;
+    margin: 0;
+    padding: 0;
+}
+header {
+    background-color: #0d6efd;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+}
+.container {
+    display: flex;
+    flex-direction: column;
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 1rem;
+    gap: 1rem;
+}
+input[type="file"] {
+    padding: 0.5rem;
+    font-size: 1rem;
+}
+#fileList {
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+.file-item {
+    cursor: pointer;
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+.file-item:hover {
+    background-color: #f0f0f0;
+}
+#fileContent {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 1rem;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    max-height: 600px;
+}
+footer {
+    text-align: center;
+    margin: 2rem;
+    color: #666;
+    font-size: 0.9rem;
+}
+</style>
+</head>
+<body>
+<header>
+    <h1>modcore CRX Viewer</h1>
+    <p>Upload a CRX file and explore its source code</p>
+</header>
+<div class="container">
+    <input type="file" id="crxInput" accept=".crx"/>
+    <div id="fileList"></div>
+    <pre id="fileContent">Select a file to view its content...</pre>
+</div>
+<footer>modcore Extension Manager | GitHub Pages CRX Viewer</footer>
+<script src="viewer.js"></script>
+</body>
+</html>
