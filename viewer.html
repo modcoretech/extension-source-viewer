@@ -2,59 +2,122 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>modcore CRX Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRX/ZIP Code Inspector (Fixed Layout)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/json/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.0/beautify.js"></script>
+
 <style>
-  body { margin:0; font-family:Arial,sans-serif; }
-  header { background:#20232a; color:white; padding:12px 20px; font-size:1.5em; display:flex; justify-content:space-between; align-items:center; }
-  header button { background:#61dafb; border:none; padding:6px 12px; cursor:pointer; border-radius:4px; }
-  header button:hover { background:#21a1f1; }
+  /* Dark Scrollbar */
+  #fileTree::-webkit-scrollbar, .CodeMirror-vscrollbar { width: 10px; }
+  #fileTree::-webkit-scrollbar-track, .CodeMirror-vscrollbar { background: #1f2937; }
+  #fileTree::-webkit-scrollbar-thumb { background-color: #55595c; border-radius: 5px; }
+  #fileTree::-webkit-scrollbar-thumb:hover { background: #6f7478; }
 
-  #main { display:flex; height:calc(100vh - 50px); }
-  #leftPanel { width:320px; background:#fff; border-right:1px solid #ccc; display:flex; flex-direction:column; }
-  #fileControls { padding:10px; border-bottom:1px solid #ccc; }
-  #fileTree { flex:1; overflow:auto; padding:10px; }
-  #fileTree ul { list-style:none; padding-left:15px; }
-  #fileTree li { cursor:pointer; padding:2px 4px; border-radius:3px; }
-  #fileTree li:hover { background:#e0e0e0; }
-  #fileTree li.selected { background:#61dafb; color:#fff; }
+  /* Tree node styling */
+  .tree-node-label { padding: 6px 10px; border-radius: 4px; transition: background-color 0.15s; user-select: none; }
+  .tree-node-label:hover { background-color: #3f444c; }
+  .file-active { background-color: #4c5258 !important; color: #a9f0d1; font-weight: 600; }
+  
+  /* CodeMirror fixes for full height and theme */
+  /* This ensures the editor takes up the full available height and enables proper internal scrolling */
+  .CodeMirror { height: 100%; font-size: 14px; line-height: 1.5; }
+  .cm-s-dracula .CodeMirror-cursor { border-left: 1px solid #ff79c6 !important; }
 
-  #rightPanel { flex:1; display:flex; flex-direction:column; }
-  #searchContainer { padding:10px; border-bottom:1px solid #ccc; display:flex; gap:5px; align-items:center; }
-  #viewer { flex:1; overflow:auto; padding:10px; font-family:monospace; white-space:pre; background:#1e1e1e; color:#ddd; }
+  /* Media Viewer Styling */
+  #mediaViewer { overflow: auto; background-color: #1e293b; }
+  #mediaViewer img, #mediaViewer svg { max-width: 100%; max-height: 100%; object-fit: contain; }
 
-  /* Dark/light themes */
-  body.light #viewer { background:#f5f5f5; color:#111; }
-  body.light #fileTree li.selected { background:#21a1f1; color:#fff; }
-
-  input[type="text"] { flex:1; padding:4px 6px; border-radius:4px; border:1px solid #ccc; }
-  button.small { padding:4px 8px; font-size:0.9em; }
+  /* Toast notification style */
+  #toast { position: fixed; top: 1rem; right: 1rem; padding: 10px 20px; border-radius: 6px; background-color: #10b981; color: white; z-index: 100; opacity: 0; transition: opacity 0.3s ease-in-out; }
+  .toast-active { opacity: 1; }
 </style>
-<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.css" rel="stylesheet" />
 </head>
-<body>
-<header>
-  modcore CRX Viewer
-  <button id="themeToggle">Toggle Theme</button>
-</header>
-<div id="main">
-  <div id="leftPanel">
-    <div id="fileControls">
-      <input type="file" id="crxInput" accept=".crx">
-      <button id="processBtn" class="small">Process File</button>
-    </div>
-    <div id="fileTree"><ul id="treeRoot"></ul></div>
+<body class="flex flex-col h-screen bg-gray-900 text-gray-200 overflow-hidden">
+
+<header class="flex justify-between items-center bg-gray-800 text-white p-4 shadow-xl z-20 border-b border-gray-700">
+  <h1 class="text-xl font-bold tracking-wider">
+    <span class="text-blue-400 mr-2">{'/'}</span> CRX/ZIP Code Inspector
+  </h1>
+  <div class="flex gap-3 items-center">
+    <button id="exportBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition duration-200 shadow-md" title="Export all files as a ZIP archive">
+      Export All
+    </button>
+    <button id="downloadBtn" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition duration-200 shadow-md" title="Download the currently viewed file">
+      Download Current
+    </button>
   </div>
-  <div id="rightPanel">
-    <div id="searchContainer">
-      <input type="text" id="searchBox" placeholder="Search files...">
-      <button id="exportBtn" class="small">Export Selected</button>
+</header>
+
+<div id="toast" role="alert" aria-live="assertive"></div>
+
+<div class="flex flex-1 overflow-hidden">
+  <div id="leftPanel" class="flex flex-col w-80 bg-gray-800 border-r border-gray-700 shadow-2xl z-10 flex-shrink-0">
+    <div class="p-4 flex flex-col gap-3 border-b border-gray-700">
+      <input type="file" id="crxInput" accept=".crx, .zip" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-blue-400 hover:file:bg-gray-600 transition duration-150" aria-label="Select CRX or ZIP File">
+      <button id="processBtn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-semibold transition duration-200 shadow-md" title="Process the selected file">
+        Analyze File
+      </button>
+      <input type="text" id="searchBox" placeholder="Filter file tree paths..." class="p-2 border border-gray-700 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" aria-label="Filter file tree">
     </div>
-    <pre id="viewer" class="language-js">Upload a CRX file and press "Process File" to view source.</pre>
+    <div id="fileTree" role="tree" class="flex-1 overflow-auto p-4">
+      <div id="treePlaceholder" class="text-gray-500 text-center mt-8 p-2">
+        <h3 class="text-lg font-bold text-gray-400 mb-2">Get Started</h3>
+        <p class="text-sm">1. Select a **.crx** or **.zip** file above.</p>
+        <p class="text-sm">2. Click **Analyze File** to view the structure.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="rightPanel" class="flex-1 flex flex-col overflow-hidden">
+    
+    <div id="viewerHeader" class="p-3 border-b border-gray-700 bg-gray-800 flex justify-between items-center sticky top-0 z-10 hidden flex-shrink-0">
+        <h2 id="currentFileNameDisplay" class="text-md font-medium text-blue-400 truncate" aria-live="polite"></h2>
+        <div class="flex gap-3">
+            <button id="copyFileBtn" class="bg-gray-700 hover:bg-gray-600 text-sm px-3 py-1 rounded-full transition duration-150 text-gray-300" title="Copy file content to clipboard">Copy Content</button>
+            <button id="unminifyBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white text-sm px-3 py-1 rounded-full transition duration-150 hidden" title="Toggle Prettify/Minify JavaScript code">
+              Prettify Code
+            </button>
+        </div>
+    </div>
+
+    <div id="viewerContainer" class="flex-1 flex flex-col overflow-hidden bg-gray-900">
+      
+      <div id="editorContainer" class="flex-1 hidden">
+          </div>
+      
+      <div id="mediaViewer" class="p-4 h-full flex justify-center items-center hidden flex-1">
+      </div>
+      
+      <div id="initialMessage" class="p-8 text-center text-gray-500 h-full flex flex-col justify-center items-center flex-1">
+        <svg class="w-16 h-16 mb-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+        <p class="text-lg font-semibold">Select a file from the tree to inspect its source or view media.</p>
+        <p class="text-sm mt-2 text-gray-600">The professional editor supports large files and search (Ctrl+F) for superior performance.</p>
+      </div>
+      
+      <div id="statusBar" class="p-1 text-xs bg-gray-700 text-gray-400 border-t border-gray-600 hidden justify-end items-center gap-4 flex-shrink-0">
+          <span class="text-green-400 font-semibold">Ready</span>
+          <span>Cursor: L<span id="cursorLine">1</span>, C<span id="cursorCol">1</span></span>
+      </div>
+    </div>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.11.0/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="viewer.js"></script>
 </body>
 </html>
