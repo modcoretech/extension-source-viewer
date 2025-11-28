@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extension Manifest Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        /* Dark Theme Global Styling */
+        
+        /* Dependency Tree Styling */
+        .manifest-property-container {
+            border-left: 1px solid transparent; /* Placeholder for indentation */
+        }
+        .manifest-children-panel {
+            /* This is the indentation for child properties */
+            padding-left: 1.5rem; 
+            border-left: 2px dashed #2d3748; /* Visual guide for hierarchy */
+            margin-left: 1.35rem; 
+        }
+
+        .manifest-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #2d3748; /* Darker border */
+            transition: background-color 0.15s ease-in-out;
+        }
+        .manifest-item:hover {
+            background-color: #1a202c; /* Slightly lighter on hover */
+            cursor: default;
+        }
+        .manifest-item-title {
+            font-weight: 600;
+            color: #E2E8F0; /* Light text */
+            font-size: 0.95rem;
+        }
+        .manifest-item-value {
+            text-align: right;
+            color: #CBD5E0; /* Subdued text */
+            font-size: 0.9rem;
+            max-width: 50%; /* Prevent wide values from pushing elements */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .manifest-section-header {
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.25rem;
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: #718096; /* Medium Grey text */
+            border-bottom: 2px solid #2D3748;
+        }
+        
+        /* Badges - Enhanced Contrast */
+        .badge-mv3 { background-color: #48BB78; color: #1A202C; font-weight: 700; }
+        .badge-mv2 { background-color: #F6AD55; color: #1A202C; font-weight: 700; }
+        .badge-security { background-color: #E53E3E; color: #FFF; font-weight: 700; border: 1px solid #C53030; }
+        .badge-warning { background-color: #DD6B20; color: #FFF; font-weight: 700; border: 1px solid #C05621; }
+
+        /* CodeMirror Custom Styling */
+        .CodeMirror {
+            height: 100% !important;
+            font-size: 14px;
+            border-radius: 0 0 0.5rem 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .CodeMirror-wrap { overflow-wrap: break-word; }
+        
+        /* Fix CodeMirror scrollable issue */
+        #jsonEditorWrapper {
+            flex-grow: 1; 
+            overflow: hidden; 
+        }
+        
+        /* Split.js Gutter Styling */
+        .gutter {
+            background-color: #1A202C;
+            background-repeat: no-repeat;
+            background-position: 50%;
+            cursor: col-resize;
+            width: 8px;
+            border-left: 1px solid #2D3748;
+            border-right: 1px solid #2D3748;
+        }
+        .gutter.gutter-horizontal {
+            background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkIt+wAAAABGdBTUEAALGPC/xhBQAAABl0RVh0U29mdHdhcmUAQWRvYmUgSW1hZ2VSZWFkeXHJZTwAAAAASUVORK5CYII=');
+        }
+    </style>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/json/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/brace-fold.min.js"></script>
+
+
+    <script src="https://kit.fontawesome.com/b26b3a2414.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/split.js/dist/split.min.js"></script>
+</head>
+
+<body class="h-screen overflow-hidden bg-gray-900 text-gray-300">
+
+    <input type="file" id="crxInput" class="hidden" accept=".zip,.crx,.xpi">
+
+    <div id="loadingOverlay" class="hidden fixed inset-0 z-50 bg-gray-900/90 backdrop-blur-sm flex flex-col justify-center items-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+        <p class="mt-4 text-lg font-semibold text-blue-400">Analyzing Manifest...</p>
+        <p class="text-sm text-gray-400">Extracting manifest.json and performing security checks.</p>
+    </div>
+
+    <div id="dropOverlay" class="hidden fixed inset-0 z-40 bg-gray-800/80 border-4 border-dashed border-blue-500 rounded-lg flex justify-center items-center text-white text-2xl font-bold transition duration-300 pointer-events-none">
+        Drop Extension File Here (.zip, .crx, .xpi)
+    </div>
+
+    <div id="appContainer" class="flex flex-col h-full">
+
+        <header class="p-4 bg-gray-800 shadow-xl border-b border-gray-700">
+            <h1 class="text-xl font-extrabold text-white flex items-center">
+                <i class="fa-solid fa-file-contract mr-3 text-blue-400"></i>
+                Extension Manifest Analyzer
+            </h1>
+        </header>
+
+        <div id="splitContainer" class="flex flex-grow overflow-hidden">
+            
+            <div id="detailsPanel" class="flex-1 bg-gray-800 overflow-y-auto p-6 flex flex-col min-w-[300px]">
+                
+                <div id="welcomeState" class="h-full flex flex-col justify-center items-center text-center p-8 transition-opacity duration-500">
+                    <i class="fa-solid fa-cloud-arrow-up text-6xl text-blue-500 mb-6"></i>
+                    <h2 class="text-2xl font-bold text-white mb-2">Start Security Analysis</h2>
+                    <p class="text-gray-400 mb-6">Drag and drop a **CRX**, **ZIP**, or **XPI** file anywhere, or use the button to select it.</p>
+                    <button onclick="document.getElementById('crxInput').click()" 
+                            class="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-150 shadow-lg">
+                        <i class="fa-solid fa-folder-open mr-2"></i> Select Extension File
+                    </button>
+                    <p class="text-xs text-gray-600 mt-6">Only the internal `manifest.json` will be processed for analysis.</p>
+                </div>
+
+                <div id="detailsContent" class="hidden flex-col flex-grow">
+                    <div class="pb-4 border-b border-gray-700 mb-4">
+                        <h2 id="extName" class="text-3xl font-extrabold text-white">Extension Name</h2>
+                        <div class="flex flex-wrap items-center mt-1">
+                            <p id="extVersion" class="text-sm text-gray-400 mr-4">Version: N/A</p>
+                            <div id="extBadges" class="flex flex-wrap gap-2 mt-2">
+                                </div>
+                        </div>
+                        <p id="extDescription" class="text-sm text-gray-500 italic mt-3"></p>
+                    </div>
+
+                    <div class="mb-4">
+                        <input type="text" id="propertyFilter" placeholder="Filter properties by name or value..." 
+                               class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+                    </div>
+
+                    <div id="manifestSections" class="flex-grow">
+                        </div>
+                </div>
+
+            </div>
+
+            <div id="jsonEditorPanel" class="flex-1 flex flex-col bg-gray-900 min-w-[300px] border-l border-gray-700">
+                <div class="flex justify-between items-center p-2 bg-gray-800 border-b border-gray-700">
+                    <span class="text-sm font-semibold text-gray-400 flex items-center">
+                        <i class="fa-solid fa-terminal mr-2"></i>
+                        manifest.json (Raw Source)
+                    </span>
+                    <div class="flex items-center gap-4">
+                        <span id="jsonLineCol" class="text-xs text-gray-600">Ln 1, Col 1</span>
+                        <button id="copyJsonBtn" class="hidden text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1 bg-gray-700 rounded-md">
+                            <i class="fa-solid fa-copy mr-1"></i> Copy JSON
+                        </button>
+                    </div>
+                </div>
+                <div id="jsonEditorWrapper" class="flex-grow"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="detailModal" data-value="" class="hidden fixed inset-0 z-[110] bg-gray-900/90 backdrop-blur-sm flex justify-center items-start pt-20">
+        <div id="modalContent" class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 opacity-0">
+            <div class="p-5 border-b border-gray-700 flex justify-between items-center">
+                <h3 id="modalTitle" data-propkey="" class="text-xl font-bold text-white flex items-center">
+                    <i id="modalIcon" class="mr-3 text-red-400"></i> Property Details
+                </h3>
+                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-2xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 max-h-[70vh] overflow-y-auto">
+                <p id="modalDescription" class="text-gray-300 mb-4 italic"></p>
+                
+                <h4 class="text-md font-semibold text-gray-400 mb-2">Raw Value Structure</h4>
+                <pre id="modalRawJson" class="bg-gray-900 p-3 rounded-lg text-sm text-green-400 whitespace-pre-wrap break-words max-h-40 overflow-y-auto"></pre>
+                
+                <div id="modalArrayContent" class="mt-4 hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-md font-semibold text-gray-400">Detailed List</h4>
+                        <span class="text-sm text-gray-500">Total: <span id="modalArrayCount">0</span></span>
+                    </div>
+                    <ul id="modalArray" class="bg-gray-900 rounded-lg max-h-60 overflow-y-auto divide-y divide-gray-700">
+                        </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast" class="fixed bottom-6 right-6 translate-y-20 opacity-0 transform transition-all duration-300 z-[100] flex items-center gap-3 border-l-4">
+        <i id="toastIcon" class="w-4 h-4"></i>
+        <span id="toastMsg"></span>
+    </div>
+
+    <script src="manifest-viewer.js"></script>
+
+    <script>
+        window.onload = function() {
+            // Initialize Split.js for the main panels
+            Split(['#detailsPanel', '#jsonEditorPanel'], {
+                sizes: [50, 50],
+                minSize: 300,
+                gutterSize: 8,
+                cursor: 'col-resize'
+            });
+            // Ensure JS initialization runs after DOM load
+            if (typeof initApp === 'function') {
+                initApp();
+            }
+            
+            // Close modal on escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeDetailModal();
+                }
+            });
+            
+            // Make closeDetailModal globally accessible for onclick in HTML
+            window.closeDetailModal = function() {
+                const modal = document.getElementById('detailModal');
+                const modalContent = document.getElementById('modalContent');
+                modalContent.classList.remove('scale-100', 'opacity-100');
+                modalContent.classList.add('scale-95', 'opacity-0');
+                // Also clear modal filter input on close
+                const filterInput = document.getElementById('modalArrayFilter');
+                if(filterInput) filterInput.value = ''; 
+                setTimeout(() => modal.classList.add('hidden'), 300); // Wait for transition
+            }
+        };
+    </script>
+</body>
+</html>
