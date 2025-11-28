@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CRX/ZIP Code Inspector (Fixed Layout)</title>
+<title>Advanced CRX/ZIP Inspector</title>
 <script src="https://cdn.tailwindcss.com"></script>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
@@ -16,105 +16,218 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/markdown/markdown.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/dialog/dialog.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/dialog/dialog.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/search/searchcursor.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/search/search.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/xml-fold.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/fold/foldgutter.min.css">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.0/beautify.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.5/split.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
-  /* Dark Scrollbar */
-  #fileTree::-webkit-scrollbar, .CodeMirror-vscrollbar { width: 10px; }
-  #fileTree::-webkit-scrollbar-track, .CodeMirror-vscrollbar { background: #1f2937; }
-  #fileTree::-webkit-scrollbar-thumb { background-color: #55595c; border-radius: 5px; }
-  #fileTree::-webkit-scrollbar-thumb:hover { background: #6f7478; }
-
-  /* Tree node styling */
-  .tree-node-label { padding: 6px 10px; border-radius: 4px; transition: background-color 0.15s; user-select: none; }
-  .tree-node-label:hover { background-color: #3f444c; }
-  .file-active { background-color: #4c5258 !important; color: #a9f0d1; font-weight: 600; }
+  /* Base Styles */
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   
-  /* CodeMirror fixes for full height and theme */
-  /* This ensures the editor takes up the full available height and enables proper internal scrolling */
-  .CodeMirror { height: 100%; font-size: 14px; line-height: 1.5; }
-  .cm-s-dracula .CodeMirror-cursor { border-left: 1px solid #ff79c6 !important; }
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #111827; }
+  ::-webkit-scrollbar-thumb { background-color: #374151; border-radius: 5px; border: 2px solid #111827; }
+  ::-webkit-scrollbar-thumb:hover { background-color: #4b5563; }
 
-  /* Media Viewer Styling */
-  #mediaViewer { overflow: auto; background-color: #1e293b; }
-  #mediaViewer img, #mediaViewer svg { max-width: 100%; max-height: 100%; object-fit: contain; }
+  /* Split.js Gutters */
+  .gutter { background-color: #1f2937; background-repeat: no-repeat; background-position: 50%; transition: background 0.2s; position: relative; z-index: 10; }
+  .gutter:hover { background-color: #3b82f6; }
+  .gutter.gutter-horizontal { cursor: col-resize; }
 
-  /* Toast notification style */
-  #toast { position: fixed; top: 1rem; right: 1rem; padding: 10px 20px; border-radius: 6px; background-color: #10b981; color: white; z-index: 100; opacity: 0; transition: opacity 0.3s ease-in-out; }
-  .toast-active { opacity: 1; }
+  /* Tree View */
+  .tree-node { 
+      @apply flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer select-none text-sm text-gray-400 border border-transparent transition-all; 
+  }
+  .tree-node:hover { @apply bg-gray-800 text-gray-200; }
+  .tree-node.active { @apply bg-blue-900/40 text-blue-300 border-blue-500/30; }
+  /* Highlight for search matches */
+  .tree-node.highlight-match { @apply text-yellow-300 font-medium; }
+
+  /* CodeMirror Overrides */
+  .CodeMirror { height: 100%; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6; background-color: #1f2937 !important; }
+  .cm-s-dracula.CodeMirror { background-color: #0f111a !important; }
+  .cm-s-dracula .CodeMirror-gutters { background-color: #0f111a !important; border-right: 1px solid #1f2937; }
+  .CodeMirror-activeline-background { background: #1e293b !important; }
+
+  /* Tabs Styling */
+  #tabsContainer { scrollbar-width: none; }
+  #tabsContainer::-webkit-scrollbar { display: none; }
+  
+  .tab-item { 
+      @apply flex items-center gap-2 px-3 py-2 text-xs border-r border-gray-700 text-gray-400 cursor-pointer bg-gray-800 transition-colors select-none min-w-[120px] max-w-[200px] h-full relative; 
+  }
+  .tab-item:hover { @apply bg-gray-700 text-gray-200; }
+  .tab-item.active { @apply bg-[#0f111a] text-blue-400 border-t-2 border-t-blue-500; }
+  .tab-close { @apply opacity-0 hover:bg-red-500/20 hover:text-red-400 rounded p-0.5 transition-all; }
+  .tab-item:hover .tab-close, .tab-item.active .tab-close { opacity: 1; }
+
+  /* Context Menu */
+  #contextMenu { @apply fixed bg-gray-800 border border-gray-700 shadow-xl rounded-lg py-1 z-50 hidden min-w-[160px]; }
+  .ctx-item { @apply px-4 py-2 text-sm text-gray-300 hover:bg-blue-600 hover:text-white cursor-pointer flex items-center gap-2; }
+
+  /* Markdown */
+  .markdown-body { @apply p-8 prose prose-invert prose-sm max-w-none overflow-auto h-full bg-[#0f111a]; }
+
+  /* Loading Overlay */
+  #loadingOverlay { backdrop-filter: blur(2px); }
 </style>
 </head>
-<body class="flex flex-col h-screen bg-gray-900 text-gray-200 overflow-hidden">
+<body class="flex flex-col h-screen bg-gray-900 text-gray-200 overflow-hidden font-sans selection:bg-blue-500/30">
 
-<header class="flex justify-between items-center bg-gray-800 text-white p-4 shadow-xl z-20 border-b border-gray-700">
-  <h1 class="text-xl font-bold tracking-wider">
-    <span class="text-blue-400 mr-2">{'/'}</span> CRX/ZIP Code Inspector
-  </h1>
-  <div class="flex gap-3 items-center">
-    <button id="exportBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition duration-200 shadow-md" title="Export all files as a ZIP archive">
-      Export All
+<div id="contextMenu">
+    <div class="ctx-item" id="ctxCopyPath"><i class="fa-regular fa-copy"></i> Copy Path</div>
+    <div class="ctx-item" id="ctxDownload"><i class="fa-solid fa-download"></i> Download</div>
+</div>
+
+<div id="dropOverlay" class="fixed inset-0 bg-gray-900/90 z-50 hidden flex flex-col items-center justify-center border-4 border-blue-500 border-dashed m-6 rounded-2xl pointer-events-none">
+    <i class="fa-solid fa-cloud-arrow-up text-6xl text-blue-400 mb-4 animate-bounce"></i>
+    <h2 class="text-3xl font-bold text-white">Drop to Analyze</h2>
+</div>
+
+<div id="loadingOverlay" class="fixed inset-0 bg-black/50 z-[60] hidden flex flex-col items-center justify-center">
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+    <p class="text-white font-medium animate-pulse">Processing...</p>
+</div>
+
+<header class="flex justify-between items-center bg-gray-800 border-b border-gray-700 px-4 h-14 flex-shrink-0 z-20">
+  <div class="flex items-center gap-3">
+    <div class="bg-gradient-to-br from-blue-600 to-blue-800 text-white p-1.5 rounded-lg shadow-lg">
+        <i class="fa-solid fa-box-open text-sm"></i>
+    </div>
+    <h1 class="text-base font-bold tracking-wide text-gray-100">
+      CRX<span class="text-blue-500">/</span>Inspector
+    </h1>
+  </div>
+  
+  <div class="flex items-center gap-3">
+    <button id="exportBtn" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-2 border border-gray-600">
+        <i class="fa-solid fa-file-zipper"></i> Export ZIP
     </button>
-    <button id="downloadBtn" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition duration-200 shadow-md" title="Download the currently viewed file">
-      Download Current
-    </button>
+    <label class="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-lg shadow-blue-500/20">
+        <i class="fa-solid fa-upload"></i> Open File
+        <input type="file" id="crxInput" accept=".crx, .zip, .xpi" class="hidden">
+    </label>
   </div>
 </header>
 
-<div id="toast" role="alert" aria-live="assertive"></div>
-
-<div class="flex flex-1 overflow-hidden">
-  <div id="leftPanel" class="flex flex-col w-80 bg-gray-800 border-r border-gray-700 shadow-2xl z-10 flex-shrink-0">
-    <div class="p-4 flex flex-col gap-3 border-b border-gray-700">
-      <input type="file" id="crxInput" accept=".crx, .zip" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-blue-400 hover:file:bg-gray-600 transition duration-150" aria-label="Select CRX or ZIP File">
-      <button id="processBtn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-semibold transition duration-200 shadow-md" title="Process the selected file">
-        Analyze File
-      </button>
-      <input type="text" id="searchBox" placeholder="Filter file tree paths..." class="p-2 border border-gray-700 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" aria-label="Filter file tree">
-    </div>
-    <div id="fileTree" role="tree" class="flex-1 overflow-auto p-4">
-      <div id="treePlaceholder" class="text-gray-500 text-center mt-8 p-2">
-        <h3 class="text-lg font-bold text-gray-400 mb-2">Get Started</h3>
-        <p class="text-sm">1. Select a **.crx** or **.zip** file above.</p>
-        <p class="text-sm">2. Click **Analyze File** to view the structure.</p>
+<div class="flex-1 flex overflow-hidden relative">
+  
+  <div id="sidebar" class="bg-gray-800 flex flex-col border-r border-gray-700 min-w-[220px]">
+    
+    <div class="p-2 border-b border-gray-700 bg-gray-800">
+      <div class="relative">
+          <i class="fa-solid fa-search absolute left-3 top-2.5 text-gray-500 text-xs"></i>
+          <input type="text" id="searchBox" placeholder="Filter files (recursive)..." class="w-full bg-gray-900 border border-gray-700 text-gray-200 text-xs rounded pl-8 pr-2 py-2 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-600 transition-all">
       </div>
+    </div>
+
+    <div id="fileTree" role="tree" class="flex-1 overflow-auto p-2 pb-10 custom-scrollbar focus:outline-none" tabindex="0">
+      <div id="treePlaceholder" class="flex flex-col items-center justify-center h-64 text-gray-500 opacity-60">
+        <i class="fa-solid fa-folder-tree text-4xl mb-3 text-gray-600"></i>
+        <p class="text-xs">No file loaded</p>
+      </div>
+    </div>
+    
+    <div id="fileInfoPanel" class="p-3 bg-gray-900 border-t border-gray-700 text-[10px] text-gray-400 hidden">
+        <div class="flex justify-between mb-1"><span class="font-bold text-gray-500">SIZE</span> <span id="infoSize" class="text-gray-300">-</span></div>
+        <div class="flex justify-between"><span class="font-bold text-gray-500">TYPE</span> <span id="infoType" class="text-gray-300">-</span></div>
     </div>
   </div>
 
-  <div id="rightPanel" class="flex-1 flex flex-col overflow-hidden">
+  <div id="mainContent" class="bg-[#0f111a] flex flex-col flex-1 overflow-hidden min-w-[300px]">
     
-    <div id="viewerHeader" class="p-3 border-b border-gray-700 bg-gray-800 flex justify-between items-center sticky top-0 z-10 hidden flex-shrink-0">
-        <h2 id="currentFileNameDisplay" class="text-md font-medium text-blue-400 truncate" aria-live="polite"></h2>
-        <div class="flex gap-3">
-            <button id="copyFileBtn" class="bg-gray-700 hover:bg-gray-600 text-sm px-3 py-1 rounded-full transition duration-150 text-gray-300" title="Copy file content to clipboard">Copy Content</button>
-            <button id="unminifyBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white text-sm px-3 py-1 rounded-full transition duration-150 hidden" title="Toggle Prettify/Minify JavaScript code">
-              Prettify Code
-            </button>
+    <div id="tabsWrapper" class="bg-gray-800 border-b border-gray-700 h-9 flex hidden">
+        <div id="tabsContainer" class="flex-1 flex overflow-x-auto">
+            </div>
+    </div>
+
+    <div id="editorToolbar" class="h-9 border-b border-gray-700 bg-gray-800/30 flex items-center justify-between px-4 hidden backdrop-blur-sm">
+       <div class="flex items-center gap-2 text-xs text-gray-400 overflow-hidden">
+           <i class="fa-regular fa-folder-open text-blue-500"></i>
+           <span id="filePathDisplay" class="font-mono text-gray-300 truncate"></span>
+       </div>
+       <div class="flex items-center gap-3">
+           <button id="markdownPreviewBtn" class="hidden text-gray-400 hover:text-white text-xs gap-1 flex items-center" title="Toggle Preview">
+               <i class="fa-solid fa-book-open"></i> Read
+           </button>
+           <div class="h-3 w-px bg-gray-600"></div>
+           <button id="unminifyBtn" class="text-yellow-600 hover:text-yellow-400 text-xs font-semibold hidden flex items-center gap-1" title="Format Code">
+               <i class="fa-solid fa-wand-magic-sparkles"></i> Prettify
+           </button>
+           <button id="copyFileBtn" class="text-gray-400 hover:text-white text-xs flex items-center gap-1" title="Copy Content">
+               <i class="fa-regular fa-copy"></i> Copy
+           </button>
+       </div>
+    </div>
+
+    <div id="viewerContainer" class="flex-1 relative overflow-hidden bg-[#0f111a]">
+        
+        <div id="welcomeScreen" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 select-none z-10 bg-gray-900">
+            <div class="flex flex-col items-center animate-fade-in">
+                <div class="w-20 h-20 bg-gray-800 rounded-2xl flex items-center justify-center mb-6 shadow-xl border border-gray-700">
+                    <i class="fa-solid fa-cloud-arrow-up text-4xl text-blue-500"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-200">Start Analyzing</h3>
+                <p class="text-sm mt-2 text-gray-500 text-center max-w-xs">Open a CRX, ZIP, or XPI file to inspect its source code and assets.</p>
+                <button id="heroUploadBtn" class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-sm font-medium transition shadow-lg shadow-blue-500/20">
+                    Select File
+                </button>
+            </div>
+        </div>
+
+        <div id="noFileSelected" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 select-none z-10 bg-[#0f111a] hidden">
+            <i class="fa-solid fa-code-branch text-5xl text-gray-700 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-400">No File Open</h3>
+            <p class="text-xs mt-2 text-gray-600">Select a file from the sidebar.</p>
+        </div>
+
+        <div id="editorWrapper" class="h-full hidden"></div>
+        
+        <div id="markdownViewer" class="markdown-body hidden"></div>
+
+        <div id="mediaViewer" class="hidden h-full flex flex-col items-center justify-center bg-[#0f111a] relative overflow-hidden">
+            <div class="absolute bottom-6 flex gap-2 z-10 bg-gray-800/80 backdrop-blur p-1.5 rounded-full border border-gray-600 shadow-xl">
+                 <button id="zoomOut" class="w-8 h-8 rounded-full hover:bg-gray-600 text-gray-300 flex items-center justify-center"><i class="fa-solid fa-minus"></i></button>
+                 <span id="zoomLevelDisplay" class="w-12 text-center text-xs font-mono text-gray-300 flex items-center justify-center">100%</span>
+                 <button id="zoomIn" class="w-8 h-8 rounded-full hover:bg-gray-600 text-gray-300 flex items-center justify-center"><i class="fa-solid fa-plus"></i></button>
+                 <button id="resetZoom" class="w-8 h-8 rounded-full hover:bg-gray-600 text-gray-300 flex items-center justify-center" title="Reset"><i class="fa-solid fa-compress"></i></button>
+            </div>
+            <div id="mediaContainer" class="transform-gpu transition-transform duration-100 ease-out origin-center p-10">
+                </div>
+        </div>
+
+    </div>
+
+    <div id="statusBar" class="h-6 bg-gray-800 border-t border-gray-700 flex justify-between items-center px-3 text-[10px] text-gray-400 select-none flex-shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-green-500"></div>
+            <span id="statusMsg">Ready</span>
+        </div>
+        <div class="flex gap-4 font-mono">
+            <span id="langDisplay">Text</span>
+            <span>Ln <span id="cursorLine">1</span>, Col <span id="cursorCol">1</span></span>
         </div>
     </div>
-
-    <div id="viewerContainer" class="flex-1 flex flex-col overflow-hidden bg-gray-900">
-      
-      <div id="editorContainer" class="flex-1 hidden">
-          </div>
-      
-      <div id="mediaViewer" class="p-4 h-full flex justify-center items-center hidden flex-1">
-      </div>
-      
-      <div id="initialMessage" class="p-8 text-center text-gray-500 h-full flex flex-col justify-center items-center flex-1">
-        <svg class="w-16 h-16 mb-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-        <p class="text-lg font-semibold">Select a file from the tree to inspect its source or view media.</p>
-        <p class="text-sm mt-2 text-gray-600">The professional editor supports large files and search (Ctrl+F) for superior performance.</p>
-      </div>
-      
-      <div id="statusBar" class="p-1 text-xs bg-gray-700 text-gray-400 border-t border-gray-600 hidden justify-end items-center gap-4 flex-shrink-0">
-          <span class="text-green-400 font-semibold">Ready</span>
-          <span>Cursor: L<span id="cursorLine">1</span>, C<span id="cursorCol">1</span></span>
-      </div>
-    </div>
   </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 right-6 px-4 py-3 rounded bg-gray-800 border-l-4 border-blue-500 shadow-2xl text-white font-medium text-sm transform transition-all duration-300 translate-y-20 opacity-0 z-[100] flex items-center gap-3">
+    <i id="toastIcon" class="fa-solid fa-info-circle text-blue-400"></i>
+    <span id="toastMsg">Notification</span>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
