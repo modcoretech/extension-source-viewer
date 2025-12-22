@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRX Security Scanner | Client-Side Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/esprima@4.0.1/dist/esprima.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.5/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/json.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        .risk-critical { color: #ef4444; }
+        .risk-high { color: #f97316; }
+        .risk-medium { color: #eab308; }
+        .risk-low { color: #3b82f6; }
+        .risk-safe { color: #22c55e; }
+
+        .engine-card { @apply bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-blue-500 transition-all; }
+        .finding-item { @apply border-l-4 pl-3 py-2 bg-gray-900/50 mb-2 text-sm rounded-r; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <header class="bg-gray-800 border-b border-gray-700 h-16 flex items-center justify-between px-6 flex-shrink-0 z-20 shadow-lg">
+        <div class="flex items-center gap-4">
+            <div class="bg-red-900/30 p-2 rounded-lg border border-red-500/30">
+                <i class="fa-solid fa-shield-halved text-red-500 text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wide text-white">CRX <span class="text-red-500">Security</span> Audit</h1>
+                <p class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Local Static Analysis Engine</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <div id="scanStatus" class="hidden flex items-center gap-2 text-xs font-mono bg-blue-900/30 px-3 py-1 rounded-full text-blue-300 border border-blue-500/30 animate-pulse">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> Scanning Engines Active...
+            </div>
+            <label class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-md text-sm font-medium transition cursor-pointer shadow-lg shadow-blue-500/20 flex items-center gap-2">
+                <i class="fa-solid fa-upload"></i> Upload CRX/ZIP
+                <input type="file" id="fileInput" accept=".crx,.zip,.xpi" class="hidden">
+            </label>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden">
+        
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col flex-shrink-0">
+            <div class="p-4 border-b border-gray-700">
+                <h3 class="text-xs font-bold text-gray-400 uppercase mb-2">Navigation</h3>
+                <nav class="space-y-1">
+                    <button class="nav-btn active w-full text-left px-3 py-2 rounded text-sm text-white bg-gray-700 flex items-center gap-3" data-target="dashboard">
+                        <i class="fa-solid fa-chart-pie w-4"></i> Dashboard
+                    </button>
+                    <button class="nav-btn w-full text-left px-3 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-700 transition flex items-center gap-3" data-target="manifest">
+                        <i class="fa-solid fa-file-code w-4"></i> Manifest Audit
+                    </button>
+                    <button class="nav-btn w-full text-left px-3 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-700 transition flex items-center gap-3" data-target="secrets">
+                        <i class="fa-solid fa-key w-4"></i> Secrets & Keys
+                    </button>
+                    <button class="nav-btn w-full text-left px-3 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-700 transition flex items-center gap-3" data-target="dangerous">
+                        <i class="fa-solid fa-bug w-4"></i> Dangerous APIs
+                    </button>
+                    <button class="nav-btn w-full text-left px-3 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-700 transition flex items-center gap-3" data-target="source">
+                        <i class="fa-solid fa-code w-4"></i> Source Browser
+                    </button>
+                </nav>
+            </div>
+            
+            <div class="p-4 mt-auto border-t border-gray-700">
+                <div class="bg-gray-900 rounded p-3 text-center">
+                    <p class="text-[10px] text-gray-500 mb-1">RISK SCORE</p>
+                    <div id="globalScore" class="text-3xl font-bold text-gray-600">--</div>
+                    <div id="globalRiskLabel" class="text-xs font-bold text-gray-600 mt-1">No File</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-auto bg-[#0f111a] p-8 custom-scrollbar relative">
+            
+            <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 z-10 bg-[#0f111a]">
+                <div class="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mb-6 shadow-2xl border border-gray-700">
+                    <i class="fa-solid fa-radar text-5xl text-blue-500/50"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-300">Ready to Scan</h2>
+                <p class="text-sm mt-2 max-w-md text-center">Upload an extension to perform local static analysis using <span class="text-blue-400">Esprima AST</span> and <span class="text-blue-400">Heuristic Engines</span>.</p>
+            </div>
+
+            <div id="view-dashboard" class="view-section hidden space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="col-span-1 bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-xl">
+                        <h3 class="text-sm font-bold text-gray-300 mb-4">Threat Distribution</h3>
+                        <canvas id="riskChart"></canvas>
+                    </div>
+                    
+                    <div class="col-span-2 bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-xl">
+                        <h3 class="text-sm font-bold text-gray-300 mb-4">Engine Summary</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="engine-card">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs text-gray-400">MANIFEST ENGINE</span>
+                                    <i class="fa-solid fa-file-shield text-blue-500"></i>
+                                </div>
+                                <div id="summaryManifest" class="text-xl font-bold text-white">-</div>
+                                <div class="text-[10px] text-gray-500">Permissions & CSP</div>
+                            </div>
+                            <div class="engine-card">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs text-gray-400">SECRET HUNTER</span>
+                                    <i class="fa-solid fa-user-secret text-yellow-500"></i>
+                                </div>
+                                <div id="summarySecrets" class="text-xl font-bold text-white">-</div>
+                                <div class="text-[10px] text-gray-500">Keys & Tokens</div>
+                            </div>
+                            <div class="engine-card">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs text-gray-400">CODE ANALYZER</span>
+                                    <i class="fa-solid fa-code-branch text-purple-500"></i>
+                                </div>
+                                <div id="summaryCode" class="text-xl font-bold text-white">-</div>
+                                <div class="text-[10px] text-gray-500">Unsafe Methods (Eval/Inner)</div>
+                            </div>
+                            <div class="engine-card">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs text-gray-400">NETWORK SCOUT</span>
+                                    <i class="fa-solid fa-network-wired text-green-500"></i>
+                                </div>
+                                <div id="summaryNetwork" class="text-xl font-bold text-white">-</div>
+                                <div class="text-[10px] text-gray-500">Suspicious Domains</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-700 bg-gray-800/50">
+                        <h3 class="font-bold text-gray-200">Critical Findings</h3>
+                    </div>
+                    <div id="criticalList" class="p-6 space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
+                        <div class="text-center text-gray-500 text-sm py-4">No scan results yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-secrets" class="view-section hidden">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-key text-yellow-500"></i> Hardcoded Secrets
+                </h2>
+                <p class="text-sm text-gray-400 mb-6">Scans for patterns matching AWS keys, Private Keys, Google API Tokens, and other sensitive credentials.</p>
+                <div id="secretsContainer" class="space-y-4"></div>
+            </div>
+
+            <div id="view-manifest" class="view-section hidden">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-file-code text-blue-500"></i> Manifest Analysis
+                </h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-gray-800 p-4 rounded border border-gray-700">
+                        <h3 class="font-bold text-sm text-gray-300 mb-3 border-b border-gray-700 pb-2">Permissions Audit</h3>
+                        <div id="permList" class="space-y-2"></div>
+                    </div>
+                    <div class="bg-gray-800 p-4 rounded border border-gray-700">
+                        <h3 class="font-bold text-sm text-gray-300 mb-3 border-b border-gray-700 pb-2">CSP & Config</h3>
+                        <div id="cspList" class="space-y-2"></div>
+                    </div>
+                </div>
+                <div class="mt-6 bg-gray-800 p-4 rounded border border-gray-700">
+                    <h3 class="font-bold text-sm text-gray-300 mb-2">Raw Manifest</h3>
+                    <pre><code id="rawManifest" class="language-json text-xs rounded"></code></pre>
+                </div>
+            </div>
+
+            <div id="view-dangerous" class="view-section hidden">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-bug text-red-500"></i> Dangerous API Usage (AST Analysis)
+                </h2>
+                <p class="text-sm text-gray-400 mb-6">Static analysis using Esprima to detect code execution vectors like `eval()`, `setTimeout(string)`, and DOM XSS sinks.</p>
+                <div id="dangerousContainer" class="space-y-4"></div>
+            </div>
+            
+            <div id="view-source" class="view-section hidden h-full flex flex-col">
+                <div class="flex gap-4 h-full">
+                    <div id="fileTree" class="w-1/3 bg-gray-800 rounded border border-gray-700 overflow-y-auto custom-scrollbar p-2 text-sm"></div>
+                    <div class="flex-1 bg-gray-800 rounded border border-gray-700 overflow-hidden relative">
+                         <pre class="h-full overflow-auto custom-scrollbar m-0"><code id="sourceViewer" class="language-javascript h-full text-xs"></code></pre>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="viewer-security-v1.js"></script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced CRX Security Audit</title>
+    <meta name="description" content="Client-side static analysis tool for Chrome Extensions">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/nord.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/selection/active-line.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/esprima@4.0.1/dist/esprima.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root { --bg-dark: #0f172a; --panel-bg: #1e293b; --border-color: #334155; }
+        body { background-color: var(--bg-dark); color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; }
+        
+        /* Accessible Focus States */
+        button:focus-visible, a:focus-visible, input:focus-visible {
+            outline: 2px solid #3b82f6; outline-offset: 2px;
+        }
+
+        /* Scrollbars */
+        .custom-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+        .custom-scroll::-webkit-scrollbar-track { background: var(--bg-dark); }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; border: 2px solid var(--bg-dark); }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* CodeMirror Customization */
+        .CodeMirror { height: 100%; font-family: 'Fira Code', monospace; font-size: 13px; background-color: #1e293b !important; }
+        .cm-s-nord.CodeMirror { background-color: #1e293b !important; }
+        .CodeMirror-gutters { background-color: #1e293b !important; border-right: 1px solid #334155; }
+        
+        /* Utility Classes for Dynamic JS */
+        .risk-badge { padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; text-transform: uppercase; }
+        .risk-critical { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid #ef4444; }
+        .risk-high { background: rgba(249, 115, 22, 0.2); color: #fdba74; border: 1px solid #f97316; }
+        .risk-medium { background: rgba(234, 179, 8, 0.2); color: #fde047; border: 1px solid #eab308; }
+        .risk-low { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid #3b82f6; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <header class="h-16 border-b border-gray-700 bg-gray-900 flex items-center justify-between px-6 shrink-0 z-20">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600/20 p-2 rounded-lg border border-blue-500/30">
+                <i class="fa-solid fa-shield-virus text-blue-400 text-lg" aria-hidden="true"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-gray-100 tracking-wide">Extension Auditor</h1>
+                <p class="text-[10px] text-gray-400 uppercase font-mono">Static Analysis & Heuristics</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div id="status-indicator" class="hidden flex items-center gap-2 text-xs font-mono text-yellow-400 animate-pulse bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/20" role="status">
+                <i class="fa-solid fa-microscope"></i> <span id="status-text">Analyzing...</span>
+            </div>
+            <button id="upload-trigger" class="bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-500/50 text-white px-5 py-2 rounded-md text-sm font-medium transition shadow-lg shadow-blue-500/20 flex items-center gap-2">
+                <i class="fa-solid fa-upload" aria-hidden="true"></i> Load CRX / ZIP
+            </button>
+            <input type="file" id="file-input" accept=".crx,.zip,.xpi" class="hidden" aria-label="Upload extension file">
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <nav class="w-64 bg-gray-900 border-r border-gray-700 flex flex-col shrink-0" aria-label="Main Navigation">
+            <div class="p-4 space-y-1">
+                <button class="nav-btn group w-full text-left px-3 py-2.5 rounded-md text-sm transition flex items-center gap-3 bg-gray-800 text-white shadow-inner" data-target="dashboard" aria-current="page">
+                    <i class="fa-solid fa-chart-line w-5 text-center text-blue-400"></i> Audit Overview
+                </button>
+                <button class="nav-btn group w-full text-left px-3 py-2.5 rounded-md text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition flex items-center gap-3" data-target="issues">
+                    <i class="fa-solid fa-triangle-exclamation w-5 text-center text-red-400"></i> Issues & Findings
+                </button>
+                <button class="nav-btn group w-full text-left px-3 py-2.5 rounded-md text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition flex items-center gap-3" data-target="manifest">
+                    <i class="fa-solid fa-file-code w-5 text-center text-purple-400"></i> Manifest Logic
+                </button>
+                <button class="nav-btn group w-full text-left px-3 py-2.5 rounded-md text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition flex items-center gap-3" data-target="source">
+                    <i class="fa-solid fa-code w-5 text-center text-green-400"></i> Code Inspector
+                </button>
+            </div>
+
+            <div class="mt-auto p-6 border-t border-gray-800">
+                <div class="bg-gray-800/50 rounded-xl p-4 text-center border border-gray-700 relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-b from-transparent to-gray-900/50 pointer-events-none"></div>
+                    <p class="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Security Score</p>
+                    <div id="score-display" class="text-4xl font-black text-gray-700 transition-colors duration-500">--</div>
+                    <div id="risk-label" class="text-xs font-bold text-gray-600 mt-1 uppercase tracking-wider">Awaiting File</div>
+                </div>
+            </div>
+        </nav>
+
+        <main id="main-container" class="flex-1 bg-[#0f111a] overflow-hidden relative">
+            
+            <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-[#0f111a] text-center px-4">
+                <div class="w-24 h-24 bg-gray-800/50 rounded-full flex items-center justify-center mb-6 border border-gray-700 shadow-2xl animate-pulse">
+                    <i class="fa-solid fa-magnifying-glass-chart text-4xl text-blue-500"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Ready to Analyze</h2>
+                <p class="text-gray-400 max-w-md text-sm leading-relaxed">
+                    Upload a Chrome Extension (.crx, .zip) to perform a deep local security scan. 
+                    <br><br>
+                    <span class="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700">
+                        <i class="fa-solid fa-lock text-green-500"></i> 100% Client-Side / No Server Uploads
+                    </span>
+                </p>
+            </div>
+
+            <div id="view-dashboard" class="view-section hidden h-full overflow-y-auto custom-scroll p-8">
+                <div class="max-w-6xl mx-auto space-y-6">
+                    
+                    <div class="bg-blue-900/10 border-l-4 border-blue-500 p-4 rounded-r shadow-lg flex items-start gap-3">
+                        <i class="fa-solid fa-circle-info text-blue-400 mt-1"></i>
+                        <div>
+                            <h3 class="text-sm font-bold text-blue-200">Analysis Disclaimer</h3>
+                            <p class="text-xs text-blue-300/80 mt-1">This tool uses static heuristics and AST analysis. A high score does not guarantee safety, and a low score does not guarantee malware. Always manually verify findings.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                            <p class="text-xs text-gray-400 uppercase">Total Files</p>
+                            <p id="stat-files" class="text-2xl font-bold text-white">0</p>
+                        </div>
+                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                            <p class="text-xs text-gray-400 uppercase">JS/JSON Size</p>
+                            <p id="stat-size" class="text-2xl font-bold text-white">0 KB</p>
+                        </div>
+                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                            <p class="text-xs text-gray-400 uppercase">Secrets Found</p>
+                            <p id="stat-secrets" class="text-2xl font-bold text-red-400">0</p>
+                        </div>
+                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                            <p class="text-xs text-gray-400 uppercase">Entry Points</p>
+                            <p id="stat-entry" class="text-2xl font-bold text-blue-400">0</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-lg lg:col-span-1">
+                            <h3 class="text-sm font-bold text-gray-300 mb-4">Threat Distribution</h3>
+                            <canvas id="risk-chart" class="w-full"></canvas>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-lg lg:col-span-2">
+                            <h3 class="text-sm font-bold text-gray-300 mb-4">Score Deduction Breakdown</h3>
+                            <div id="score-breakdown" class="space-y-3 max-h-64 overflow-y-auto custom-scroll pr-2">
+                                </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                        <div class="px-6 py-3 border-b border-gray-700 bg-gray-800/80">
+                            <h3 class="text-sm font-bold text-gray-200">Detected Libraries & Frameworks</h3>
+                        </div>
+                        <div id="library-list" class="p-6 flex flex-wrap gap-2 text-sm text-gray-400">
+                            No libraries detected.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-issues" class="view-section hidden h-full overflow-y-auto custom-scroll p-8">
+                <div class="max-w-5xl mx-auto">
+                    <h2 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                        <i class="fa-solid fa-list-check text-red-500"></i> Findings Log
+                    </h2>
+                    
+                    <div class="flex gap-2 mb-6 text-xs">
+                        <button class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600 text-white transition filter-btn active" data-filter="all">All</button>
+                        <button class="px-3 py-1 bg-red-900/30 text-red-300 border border-red-900/50 rounded hover:bg-red-900/50 transition filter-btn" data-filter="critical">Critical</button>
+                        <button class="px-3 py-1 bg-orange-900/30 text-orange-300 border border-orange-900/50 rounded hover:bg-orange-900/50 transition filter-btn" data-filter="high">High</button>
+                    </div>
+
+                    <div id="findings-container" class="space-y-4">
+                        </div>
+                </div>
+            </div>
+
+            <div id="view-manifest" class="view-section hidden h-full overflow-y-auto custom-scroll p-8">
+                <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="space-y-6">
+                        <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                            <h3 class="text-sm font-bold text-purple-300 mb-4 border-b border-gray-700 pb-2">Permissions & Capabilities</h3>
+                            <ul id="manifest-perms" class="space-y-2 text-sm text-gray-300"></ul>
+                        </div>
+                        
+                        <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                            <h3 class="text-sm font-bold text-purple-300 mb-4 border-b border-gray-700 pb-2">Content Security Policy (CSP)</h3>
+                            <div id="manifest-csp" class="text-sm font-mono text-gray-400 break-all bg-gray-900 p-3 rounded border border-gray-700">
+                                Not defined
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col h-[500px] bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                        <div class="bg-gray-900 px-4 py-2 text-xs font-mono text-gray-400 border-b border-gray-700">manifest.json</div>
+                        <div id="manifest-editor" class="flex-1 text-sm"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-source" class="view-section hidden h-full flex flex-col">
+                <div class="h-10 bg-gray-800 border-b border-gray-700 flex items-center px-4 justify-between shrink-0">
+                    <span id="active-filename" class="font-mono text-xs text-gray-300">Select a file...</span>
+                    <span class="text-[10px] text-gray-500">Read-Only Mode</span>
+                </div>
+                <div class="flex-1 flex overflow-hidden">
+                    <div id="file-tree" class="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto custom-scroll p-2 text-sm"></div>
+                    <div class="flex-1 relative bg-[#1e293b]">
+                        <div id="code-editor" class="absolute inset-0"></div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="viewer-security-v2.js"></script>
+</body>
+</html>
